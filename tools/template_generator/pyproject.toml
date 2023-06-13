@@ -1,0 +1,15 @@
+[tool.robo]
+name = "Template Generator"
+description = "A robot for generating rcc templates from robo templates"
+python = "3.9.13"
+
+[tool.robo.dependencies]
+robocorp-tasks="0.4.1"
+requests="2.31.0"
+
+[tool.robocorp.log]
+log_filter_rules = [
+    {name = "requests", kind = "log_on_project_call"},
+    {name = "json", kind = "log_on_project_call"},
+    {name = "pathlib", kind = "log_on_project_call"},
+]

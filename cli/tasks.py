@@ -98,6 +98,7 @@ def environ(overrides: dict[str, str]):
 
 @task
 def clean(ctx):
+    """Remove all development/build artifacts"""
     TIMESTAMP.unlink(missing_ok=True)
 
     if BUILD.exists():
