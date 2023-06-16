@@ -29,3 +29,6 @@ dist/
 
 # Removed old files
 /examples/
+
+# VSCode
+.vscode/
