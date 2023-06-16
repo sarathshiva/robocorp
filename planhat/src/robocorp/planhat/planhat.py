@@ -1,77 +1,28 @@
 """Module with Planhat function keywords"""
 import requests
 import sys
+import logging
 from typing import Any, Dict, List, Union, Optional
 from enum import Enum
 
-from robot.api.deco import keyword, library
-from robot.api.logger import logging
 from tenacity import Retrying, stop_after_attempt, wait_fixed, RetryError
 
-from RPA.Robocorp.Vault import Vault
+from robocorp.vault import get_secret
 
-SOURCE_TYPE_STRINGS = ["source", "src", "srcid", "source id", "source_id"]
-EXT_TYPE_STRINGS = ["external", "ext", "extid", "external id", "external_id"]
-BASE_PH_URL = "https://api-us3.planhat.com"
+from ._enums import (
+    PlanhatIdTypes,
+    PlanhatObjectTypes,
+)
 
-
-class PlanhatObjectTypes(Enum):
-    COMPANIES = "companies"
-    COMPANY = "companies"
-    ENDUSERS = "endusers"
-    ENDUSER = "endusers"
-    LICENSES = "licenses"
-    LICENSE = "licenses"
-    ASSETS = "assets"
-    ASSET = "assets"
-    CAMPAIGNS = "campaigns"
-    CAMPAIGN = "campaigns"
-    CHURNS = "churns"
-    CHURN = "churns"
-    CONVERSIONS = "conversions"
-    CONVERSION = "conversions"
-    INVOICES = "invoices"
-    INVOICE = "invoices"
-    ISSUES = "issues"
-    ISSUE = "issues"
-    NOTES = "notes"
-    NOTE = "notes"
-    OPPORTUNITIES = "opportunities"
-    OPPORTUNITY = "opportunities"
-    NPS = "nps"
-    OBJECTIVES = "objectives"
-    OBJECTIVE = "objectives"
-    PROJECTS = "projects"
-    PROJECT = "projects"
-    SALES = "sales"
-    SALE = "sales"
-    TASKS = "tasks"
-    TASK = "tasks"
-    WORKSPACES = "workspaces"
-    WORKSPACE = "workspaces"
-    USERS = "users"
-    USER = "users"
+LOGGER = logging.getLogger(__name__)
+BASE_PH_URL = requests.models.parse_url("https://api-us3.planhat.com")
 
 
-class PlanhatIdTypes(Enum):
-    SOURCE = "srcid-"
-    SRC = "srcid-"
-    SRCID = "srcid-"
-    SOURCE_ID = "srcid-"
-    SOURCEID = "srcid-"
-    EXTERNAL = "ext-"
-    EXT = "ext-"
-    EXTID = "ext-"
-    EXTERNAL_ID = "ext-"
-    EXTERNALID = "ext-"
-
-
-@library(scope="GLOBAL")
 class Planhat:
     """Class with Planhat function keywords"""
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOGGER
         self.cached_credentials = None
 
         # Set up console logger, will only log INFO and above to console
@@ -84,7 +35,7 @@ class Planhat:
         self.logger.addHandler(console_handler)
 
     def _build_planhat_url(
-        self, object_type: PlanhatObjectTypes, id: str = None
+        self, object_type: PlanhatObjectTypes, id: Optional[str] = None
     ) -> str:
         """Builds the Planhat URL for the given object type and ID.
 
@@ -97,7 +48,6 @@ class Planhat:
         else:
             return f"{BASE_PH_URL}/{object_type.value}"
 
-    @keyword
     def set_planhat_company_id_to_hubspot_object(
         self,
         hubspot_objects: List,
@@ -138,7 +88,6 @@ class Planhat:
 
         return hubspot_objects
 
-    @keyword
     def find_planhat_object_associated_with_hubspot_object(
         self, planhat_objects: List[Dict], hubspot_object: Any, all: bool = False
     ) -> Union[Dict, List]:
@@ -167,7 +116,6 @@ class Planhat:
             self.logger.log(logging.INFO, "No matching object found.")
             return {}
 
-    @keyword
     def create_planhat_id_parameter(
         self, id: str, id_type: Optional[Union[PlanhatIdTypes, str]] = None
     ) -> str:
@@ -224,7 +172,7 @@ class Planhat:
         """
         self.cached_credentials = None
         if self.cached_credentials is None:
-            self.cached_credentials = Vault().get_secret("planhat_api")
+            self.cached_credentials = get_secret("planhat_api")
         output = {
             "Authorization": f"Bearer {self.cached_credentials['api_key']}",
             "Accept": "application/json",
@@ -301,7 +249,7 @@ class Planhat:
     def get_planhat_object_by_id(
         self,
         object_type: PlanhatObjectTypes,
-        id: str = None,
+        id: Optional[str] = None,
         id_type: Optional[Union[PlanhatIdTypes, str]] = None,
     ) -> Union[Dict, requests.Response, None]:
         """Gets a planhat object of `object_type` using
