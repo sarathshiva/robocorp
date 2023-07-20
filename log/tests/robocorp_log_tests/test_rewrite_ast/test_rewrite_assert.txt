@@ -10,9 +10,30 @@ def foo():
     with @robo_lifecycle_hooks.MethodLifecycleContext(('METHOD', __name__, __file__, 'foo', 5, {})) as @ctx:
         a = 10
         @robo_lifecycle_hooks.after_assign(__name__, __file__, 'foo', 6, 'a', a)
-        if not a > 10:
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'assert a > 10', 7, (('a', a),))
+        @tmp_1 = a
+        @tmp_2 = 10
+        if not @tmp_1 > @tmp_2:
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_1 > @tmp_2', 7, (('a', @tmp_1), ('10', @tmp_2)))
             raise AssertionError()
-        if not call() == call():
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'assert call() == call()', 8, None)
+        @tmp_3 = call1(1, 2)
+        @tmp_4 = call2(call3())
+        if not @tmp_3 == @tmp_4:
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_3 == @tmp_4', 8, (('call1(1, 2)', @tmp_3), ('call2(call3())', @tmp_4)))
             raise AssertionError('The calls do not match')
+        @tmp_5 = call1
+        @tmp_6 = call2
+        @tmp_7 = call3
+        if not @tmp_5() + @tmp_6() * @tmp_7():
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_5() + @tmp_6() * @tmp_7()', 9, None)
+            raise AssertionError()
+        @tmp_8 = a.call1
+        @tmp_9 = a.b.call2
+        @tmp_10 = a.b.c.call3
+        if not @tmp_8() + @tmp_9() * @tmp_10():
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_8() + @tmp_9() * @tmp_10()', 10, None)
+            raise AssertionError()
+        @tmp_11 = a.b.c
+        @tmp_12 = f.g
+        if not (@tmp_11 and @tmp_12):
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_11 and @tmp_12', 11, (('a.b.c', @tmp_11), ('f.g', @tmp_12)))
+            raise AssertionError()

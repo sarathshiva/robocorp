@@ -1,5 +1,7 @@
 import ast
 import types
+import typing
+from contextlib import contextmanager
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from ._ast_utils import ASTRewriter
@@ -334,7 +336,9 @@ def rewrite_ast_add_callbacks(
     imports = _make_import_aliases_ast(lineno, filter_kind)
     mod.body[pos:pos] = imports
 
+    dispatch_table = _DispatchTable()
     rewrite_ctx = ASTRewriter(mod)
+    rewrite_ctx.dispatch_data = dispatch_table
 
     node: ast.AST
 
@@ -356,7 +360,7 @@ def rewrite_ast_add_callbacks(
                 break
 
         if ev == "before":
-            handler = _dispatch_before.get(node.__class__)
+            handler = dispatch_table.dispatch_before.get(node.__class__)
             if handler:
                 result = handler(
                     rewrite_ctx, config, module_path, stack, filter_kind, node
@@ -365,7 +369,7 @@ def rewrite_ast_add_callbacks(
                     feed_generator = result
 
         else:
-            handler = _dispatch_after.get(node.__class__)
+            handler = dispatch_table.dispatch_after.get(node.__class__)
             if handler:
                 result = handler(
                     rewrite_ctx, config, module_path, stack, filter_kind, node
@@ -527,7 +531,7 @@ def _handle_if(
         )
 
 
-def _handle_assert(
+def _handle_before_assert(
     rewrite_ctx: ASTRewriter,
     config: AutoLogConfigBase,
     module_path,
@@ -536,56 +540,67 @@ def _handle_assert(
     node: ast.Assert,
 ):
     if filter_kind != FilterKind.full_log:
+        yield
         return None
 
     func_and_class_name = _get_function_and_class_name(stack)
     if not func_and_class_name:
+        yield
         return None
 
     function, _class_name = func_and_class_name
 
-    try:
-        factory = rewrite_ctx.NodeFactory(node.lineno, node.col_offset)
-        new_if_node: ast.If = factory.If(factory.NotUnaryOp(node.test))
+    dispatch_table: _DispatchTable = typing.cast(
+        _DispatchTable, rewrite_ctx.dispatch_data
+    )
+    with dispatch_table.record_name_context():
+        with dispatch_table.assert_context():
+            yield
 
-        # If(
-        # test=UnaryOp(
-        #  op=Not(),
-        #  operand=Constant(value=1)),
-        #    body=[
-        #     Raise(
-        #      exc=Call(
-        #       func=Name(id='AssertionError', ctx=Load()),
-        #       args=[
-        #        Name(id='message', ctx=Load())],
-        #       keywords=[]))],
-        #    orelse=[])],
+        try:
+            factory = rewrite_ctx.NodeFactory(node.lineno, node.col_offset)
 
-        func = factory.NameLoad("AssertionError")
-        exc = factory.Call(func)
-        if node.msg:
-            exc.args.append(node.msg)
-        raise_stmt = factory.Raise()
-        raise_stmt.exc = exc
+            # If(
+            # test=UnaryOp(
+            #  op=Not(),
+            #  operand=Constant(value=1)),
+            #    body=[
+            #     Raise(
+            #      exc=Call(
+            #       func=Name(id='AssertionError', ctx=Load()),
+            #       args=[
+            #        Name(id='message', ctx=Load())],
+            #       keywords=[]))],
+            #    orelse=[])],
 
-        call = factory.Call(factory.NameLoadRewriteCallback("assert_failed"))
-        call.args.append(factory.NameLoad("__name__"))
-        call.args.append(factory.NameLoad("__file__"))
-        call.args.append(factory.Str(f"assert {ast.unparse(node.test)}"))
-        call.args.append(factory.LineConstantAt(node.lineno))
+            func = factory.NameLoad("AssertionError")
+            exc = factory.Call(func)
+            if node.msg:
+                exc.args.append(node.msg)
+            raise_stmt = factory.Raise()
+            raise_stmt.exc = exc
 
-        targets = _collect_names_used_as_node_or_none(factory, node.test)
-        call.args.append(targets)
+            call = factory.Call(factory.NameLoadRewriteCallback("assert_failed"))
+            call.args.append(factory.NameLoad("__name__"))
+            call.args.append(factory.NameLoad("__file__"))
+            call.args.append(factory.Str(f"{ast.unparse(node.test)}"))
+            call.args.append(factory.LineConstantAt(node.lineno))
 
-        new_if_node.body = [factory.Expr(call), raise_stmt]
-        new_if_node.orelse = []
-        return new_if_node
+            new_if_node: ast.If = factory.If(factory.NotUnaryOp(node.test))
+            targets = _collect_names_used_as_node_or_none(
+                factory, node.test, dispatch_table.recorded_name_to_new_name
+            )
+            call.args.append(targets)
 
-    except Exception:
-        raise RuntimeError(
-            f"Error when rewriting assert: {function.name} line: {node.lineno} "
-            f"at: {module_path}"
-        )
+            new_if_node.body = [factory.Expr(call), raise_stmt]
+            new_if_node.orelse = []
+            rewrite_ctx.cursor.current = new_if_node
+
+        except Exception:
+            raise RuntimeError(
+                f"Error when rewriting assert: {function.name} line: {node.lineno} "
+                f"at: {module_path}"
+            )
 
 
 def _handle_assign(
@@ -866,7 +881,7 @@ def _handle_for_or_while(
 
 
 def _collect_names_used_as_node_or_none(
-    factory, collect_names_from_node
+    factory, collect_names_from_node, replacement_dict=None
 ) -> Union[ast.Constant, ast.Tuple]:
     """
     i.e.:
@@ -886,6 +901,8 @@ def _collect_names_used_as_node_or_none(
 
     If no names are available it should return a `None` node.
     """
+    replacement_dict = replacement_dict or {}
+
     target_load: Union[ast.Name, ast.Constant]
     targets: Union[ast.Constant, ast.Tuple]
     temp_targets = []
@@ -898,7 +915,7 @@ def _collect_names_used_as_node_or_none(
         target_load = factory.NameLoad(name_target.id)
         temp_targets.append(
             factory.Tuple(
-                factory.Str(target_name),
+                factory.Str(replacement_dict.get(target_name, target_name)),
                 target_load,
             )
         )
@@ -1070,30 +1087,142 @@ def _handle_yield(
         )
 
 
-_dispatch_before: Dict[
-    type,
-    Callable[
-        [ASTRewriter, AutoLogConfigBase, str, list, FilterKind, Any], Optional[list]
-    ],
-] = {}
+class _DispatchTable:
+    def __init__(self) -> None:
+        _dispatch_before: Dict[
+            type,
+            Callable[
+                [ASTRewriter, AutoLogConfigBase, str, list, FilterKind, Any],
+                Optional[list],
+            ],
+        ] = {}
 
-_dispatch_after: Dict[
-    type,
-    Callable[
-        [ASTRewriter, AutoLogConfigBase, str, list, FilterKind, Any], Optional[list]
-    ],
-] = {}
+        _dispatch_after: Dict[
+            type,
+            Callable[
+                [ASTRewriter, AutoLogConfigBase, str, list, FilterKind, Any],
+                Optional[list],
+            ],
+        ] = {}
 
-_dispatch_after[ast.Return] = _handle_return
-_dispatch_after[ast.Assign] = _handle_assign
-_dispatch_after[ast.Assert] = _handle_assert
-_dispatch_after[ast.FunctionDef] = _handle_funcdef
-_dispatch_after[ast.Yield] = _handle_yield
-_dispatch_after[ast.YieldFrom] = _handle_yield
-_dispatch_after[ast.For] = _handle_for_or_while
-_dispatch_after[ast.While] = _handle_for_or_while
-_dispatch_after[ast.If] = _handle_if
+        ### STATEMENTS
+        _dispatch_after[ast.Return] = _handle_return
+        _dispatch_after[ast.Assign] = _handle_assign
+        _dispatch_after[ast.FunctionDef] = _handle_funcdef
+        _dispatch_after[ast.For] = _handle_for_or_while
+        _dispatch_after[ast.While] = _handle_for_or_while
+        _dispatch_after[ast.If] = _handle_if
 
-# Note: returns generator which is called when it finishes (right before
-# _dispatch_after)
-_dispatch_before[ast.Try] = _handle_before_try
+        # Note: returns generator which is called when it finishes (right before
+        # _dispatch_after)
+        _dispatch_before[ast.Assert] = _handle_before_assert
+
+        # Note: returns generator which is called when it finishes (right before
+        # _dispatch_after)
+        _dispatch_before[ast.Try] = _handle_before_try
+
+        ### EXPRESSIONS
+        _dispatch_after[ast.Yield] = _handle_yield
+        _dispatch_after[ast.YieldFrom] = _handle_yield
+
+        self.dispatch_before = _dispatch_before
+        self.dispatch_after = _dispatch_after
+
+        self.recorded_name_to_new_name: Dict[str, str] = {}
+
+    def _handle_assert_compare(
+        self,
+        rewrite_ctx: ASTRewriter,
+        config,
+        module_path,
+        stack,
+        filter_kind,
+        node: ast.Compare,
+    ):
+        c = node.left
+        factory = rewrite_ctx.NodeFactory(c.lineno, c.col_offset)
+        assign = factory.Assign()
+        store_name = factory.NameTempStore()
+        assign.targets = [store_name]
+        assign.value = c
+        rewrite_ctx.stmts_cursor.before_append(assign)
+        node.left = factory.NameLoad(store_name.id)
+        self.recorded_name_to_new_name[store_name.id] = ast.unparse(c)
+
+        for i, c in enumerate(node.comparators):
+            factory = rewrite_ctx.NodeFactory(c.lineno, c.col_offset)
+            assign = factory.Assign()
+            store_name = factory.NameTempStore()
+            assign.targets = [store_name]
+            assign.value = c
+            rewrite_ctx.stmts_cursor.before_append(assign)
+            node.comparators[i] = factory.NameLoad(store_name.id)
+            self.recorded_name_to_new_name[store_name.id] = ast.unparse(c)
+        yield rewrite_ctx.DONT_GO_INTO_NODE
+
+    def _handle_assert_call(
+        self,
+        rewrite_ctx: ASTRewriter,
+        config,
+        module_path,
+        stack,
+        filter_kind,
+        node: ast.Call,
+    ):
+        factory = rewrite_ctx.NodeFactory(node.func.lineno, node.func.col_offset)
+        assign = factory.Assign()
+        store_name = factory.NameTempStore()
+        assign.targets = [store_name]
+        assign.value = node.func
+        rewrite_ctx.stmts_cursor.before_append(assign)
+        if node.args:
+            call_rep = "(...)"
+        else:
+            call_rep = "()"
+        self.recorded_name_to_new_name[
+            store_name.id
+        ] = f"{ast.unparse(node.func)}{call_rep}"
+        node.func = factory.NameLoad(store_name.id)
+        yield rewrite_ctx.DONT_GO_INTO_NODE
+
+    def _handle_assert_attribute(
+        self,
+        rewrite_ctx: ASTRewriter,
+        config,
+        module_path,
+        stack,
+        filter_kind,
+        node: ast.Attribute,
+    ):
+        factory = rewrite_ctx.NodeFactory(node.lineno, node.col_offset)
+        assign = factory.Assign()
+        store_name = factory.NameTempStore()
+        assign.targets = [store_name]
+        assign.value = node
+        rewrite_ctx.stmts_cursor.before_append(assign)
+        self.recorded_name_to_new_name[store_name.id] = ast.unparse(node)
+        rewrite_ctx.cursor.current = factory.NameLoad(store_name.id)
+        yield rewrite_ctx.DONT_GO_INTO_NODE
+
+    @contextmanager
+    def replace_before(self, tp, callback):
+        assert tp not in self.dispatch_before
+        self.dispatch_before[tp] = callback
+        yield
+        del self.dispatch_before[tp]
+
+    @contextmanager
+    def record_name_context(self):
+        self.recorded_name_to_new_name = {}
+        yield
+        print(self.recorded_name_to_new_name)
+        self.recorded_name_to_new_name = {}
+
+    @contextmanager
+    def assert_context(self):
+        with self.replace_before(
+            ast.Compare, self._handle_assert_compare
+        ), self.replace_before(ast.Call, self._handle_assert_call), self.replace_before(
+            ast.Attribute, self._handle_assert_attribute
+        ):
+            yield

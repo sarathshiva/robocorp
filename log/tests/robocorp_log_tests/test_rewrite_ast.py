@@ -577,7 +577,10 @@ def call():
 def foo():
     a = 10
     assert a > 10
-    assert call() == call(), 'The calls do not match'
+    assert call1(1, 2) == call2(call3()), 'The calls do not match'
+    assert call1() + call2() * call3()
+    assert a.call1() + a.b.call2() * a.b.c.call3()
+    assert a.b.c and f.g
 """
     )
 

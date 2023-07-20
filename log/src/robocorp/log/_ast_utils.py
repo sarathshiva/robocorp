@@ -6,6 +6,7 @@ from ast import AST
 from contextlib import contextmanager
 from functools import partial
 from typing import (
+    Any,
     Generator,
     Generic,
     Iterator,
@@ -202,7 +203,14 @@ class FuncdefMemoStack:
 ASTRewriteEv = Literal["before", "after"]
 
 
+class DontGoIntoNode:
+    pass
+
+
 class ASTRewriter:
+    # In a before this may be yielded so that we don't go into a node.
+    DONT_GO_INTO_NODE = DontGoIntoNode()
+
     def __init__(self, ast: AST) -> None:
         self._ast = ast
         self._stack: List[AST] = []
@@ -211,6 +219,9 @@ class ASTRewriter:
         self._is_generator_cache: dict = {}
         self._funcdef_memo_stack: List[FuncdefMemoStack] = [FuncdefMemoStack()]
         self._on_context_id_generated = Callback()
+
+        # Optional info (the user can fill it with any data).
+        self.dispatch_data: Any = None
 
     def iter_and_replace_nodes(
         self,
@@ -294,18 +305,21 @@ class ASTRewriter:
                     if isinstance(item, AST):
                         self._cursor_stack.append(_RewriteCursor(node, item))
 
+                        go_into = True
                         gen = yield "before", stack, item
                         if gen is not None:
                             try:
-                                next(gen)
+                                if next(gen) is self.DONT_GO_INTO_NODE:
+                                    go_into = False
                             except StopIteration:
                                 raise AssertionError(
                                     f"Expected generator {gen} to yield once!"
                                 )
 
-                        stack.append(item)
-                        yield from self._iter_and_replace_nodes(item)
-                        stack.pop()
+                        if go_into:
+                            stack.append(item)
+                            yield from self._iter_and_replace_nodes(item)
+                            stack.pop()
 
                         try:
                             if gen is not None:
@@ -347,10 +361,25 @@ class ASTRewriter:
             elif isinstance(value, AST):
                 self._cursor_stack.append(_RewriteCursor(node, value))
 
-                yield "before", stack, value
-                stack.append(value)
-                yield from self._iter_and_replace_nodes(value)
-                stack.pop()
+                gen = yield "before", stack, value
+                go_into = True
+                if gen is not None:
+                    try:
+                        if next(gen) is self.DONT_GO_INTO_NODE:
+                            go_into = False
+                    except StopIteration:
+                        raise AssertionError(f"Expected generator {gen} to yield once!")
+
+                if go_into:
+                    stack.append(value)
+                    yield from self._iter_and_replace_nodes(value)
+                    stack.pop()
+
+                try:
+                    if gen is not None:
+                        next(gen)
+                except StopIteration:
+                    pass
                 yield "after", stack, value
 
                 last_cursor = self._cursor_stack.pop(-1)
