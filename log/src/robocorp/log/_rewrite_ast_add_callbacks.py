@@ -1173,7 +1173,7 @@ class _DispatchTable:
         assign = factory.Assign()
         store_name = factory.NameTempStore()
         assign.targets = [store_name]
-        assign.value = node.func
+        assign.value = node
         rewrite_ctx.stmts_cursor.before_append(assign)
         if node.args:
             call_rep = "(...)"
@@ -1182,7 +1182,7 @@ class _DispatchTable:
         self.recorded_name_to_new_name[
             store_name.id
         ] = f"{ast.unparse(node.func)}{call_rep}"
-        node.func = factory.NameLoad(store_name.id)
+        rewrite_ctx.cursor.current = factory.NameLoad(store_name.id)
         yield rewrite_ctx.DONT_GO_INTO_NODE
 
     def _handle_assert_attribute(

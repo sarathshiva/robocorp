@@ -20,17 +20,17 @@ def foo():
         if not @tmp_3 == @tmp_4:
             @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_3 == @tmp_4', 8, (('call1(1, 2)', @tmp_3), ('call2(call3())', @tmp_4)))
             raise AssertionError('The calls do not match')
-        @tmp_5 = call1
-        @tmp_6 = call2
-        @tmp_7 = call3
-        if not @tmp_5() + @tmp_6() * @tmp_7():
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_5() + @tmp_6() * @tmp_7()', 9, None)
+        @tmp_5 = call1(22)
+        @tmp_6 = call1(22)
+        @tmp_7 = call3()
+        if not @tmp_5 + @tmp_6 * @tmp_7:
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_5 + @tmp_6 * @tmp_7', 9, (('call1(...)', @tmp_5), ('call1(...)', @tmp_6), ('call3()', @tmp_7)))
             raise AssertionError()
-        @tmp_8 = a.call1
-        @tmp_9 = a.b.call2
-        @tmp_10 = a.b.c.call3
-        if not @tmp_8() + @tmp_9() * @tmp_10():
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_8() + @tmp_9() * @tmp_10()', 10, None)
+        @tmp_8 = a.call1(call2())
+        @tmp_9 = a.b.call2(call4())
+        @tmp_10 = a.b.c.call3()
+        if not @tmp_8 + @tmp_9 * @tmp_10:
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_8 + @tmp_9 * @tmp_10', 10, (('a.call1(...)', @tmp_8), ('a.b.call2(...)', @tmp_9), ('a.b.c.call3()', @tmp_10)))
             raise AssertionError()
         @tmp_11 = a.b.c
         @tmp_12 = f.g
