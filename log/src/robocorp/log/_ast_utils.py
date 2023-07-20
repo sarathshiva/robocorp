@@ -1,5 +1,4 @@
 import ast
-import ast as ast_module
 import itertools
 import sys
 import types
@@ -21,22 +20,22 @@ from typing import (
 from robocorp.log._lifecycle_hooks import Callback
 
 
-class _NodesProviderVisitor(ast_module.NodeVisitor):
+class _NodesProviderVisitor(ast.NodeVisitor):
     def __init__(self, on_node=lambda node: None):
-        ast_module.NodeVisitor.__init__(self)
+        ast.NodeVisitor.__init__(self)
         self._stack = []
         self.on_node = on_node
 
     def generic_visit(self, node):
         self._stack.append(node)
         self.on_node(self._stack, node)
-        ast_module.NodeVisitor.generic_visit(self, node)
+        ast.NodeVisitor.generic_visit(self, node)
         self._stack.pop()
 
 
-class _PrinterVisitor(ast_module.NodeVisitor):
+class _PrinterVisitor(ast.NodeVisitor):
     def __init__(self, stream):
-        ast_module.NodeVisitor.__init__(self)
+        ast.NodeVisitor.__init__(self)
         self._level = 0
         self._stream = stream
 
@@ -93,7 +92,7 @@ class _PrinterVisitor(ast_module.NodeVisitor):
                     )
                 )
 
-            ast_module.NodeVisitor.generic_visit(self, node)
+            ast.NodeVisitor.generic_visit(self, node)
         finally:
             self._level -= 1
 
@@ -118,16 +117,16 @@ class NodeInfo(Generic[Y]):
     __repr__ = __str__
 
 
-def iter_nodes(node, accept=lambda _node: True) -> Iterator[ast_module.AST]:
-    for _field, value in ast_module.iter_fields(node):
+def iter_nodes(node, accept=lambda _node: True) -> Iterator[ast.AST]:
+    for _field, value in ast.iter_fields(node):
         if isinstance(value, list):
             for item in value:
-                if isinstance(item, ast_module.AST):
+                if isinstance(item, ast.AST):
                     if accept(item):
                         yield item
                         yield from iter_nodes(item, accept)
 
-        elif isinstance(value, ast_module.AST):
+        elif isinstance(value, ast.AST):
             if accept(value):
                 yield value
                 yield from iter_nodes(value, accept)
@@ -286,7 +285,7 @@ class ASTRewriter:
         """
         stack: List[AST] = self._stack
 
-        for field, value in ast_module.iter_fields(node):
+        for field, value in ast.iter_fields(node):
             if isinstance(value, list):
                 new_value: List[AST] = []
                 changed = False
@@ -497,8 +496,13 @@ class NodeFactory:
     def Str(self, s) -> ast.Str:
         return self._set_line_col(ast.Str(s))
 
-    def If(self, cond) -> ast.If:
+    def If(self, cond: ast.expr) -> ast.If:
         return self._set_line_col(ast.If(cond))
+
+    def NotUnaryOp(self, operand: ast.expr) -> ast.UnaryOp:
+        return self._set_line_col(
+            ast.UnaryOp(operand=operand, op=self._set_line_col(ast.Not()))
+        )
 
     def AndExpr(self, expr1, expr2) -> ast.Expr:
         andop = self._set_line_col(ast.And())

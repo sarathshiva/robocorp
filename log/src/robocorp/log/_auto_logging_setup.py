@@ -165,7 +165,9 @@ class _AutoLogging:
             else:
                 if pop_stack_entry.mod_name != mod_name or pop_stack_entry.name != name:
                     critical(
-                        f"On method return status stack package/name was: {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received: {mod_name}.{name}."
+                        "On method return status stack package/name was:"
+                        f" {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received:"
+                        f" {mod_name}.{name}."
                     )
                     return
             status = pop_stack_entry.status
@@ -198,7 +200,9 @@ class _AutoLogging:
         else:
             if pop_stack_entry.mod_name != mod_name or pop_stack_entry.name != name:
                 critical(
-                    f"On before yield status stack package/name was: {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received: {mod_name}.{name}."
+                    "On before yield status stack package/name was:"
+                    f" {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received:"
+                    f" {mod_name}.{name}."
                 )
                 return
 
@@ -231,8 +235,9 @@ class _AutoLogging:
             for robo_logger in logger_instances:
                 robo_logger.yield_resume(name, mod_name, filename, lineno)
 
-    def call_method_if(
+    def _call_with_variables(
         self,
+        element_type: str,
         mod_name: str,
         filename: str,
         name: str,
@@ -255,10 +260,20 @@ class _AutoLogging:
                     mod_name,
                     filename,
                     lineno,
-                    "IF",
+                    element_type,
                     "",
                     variables_name_type_repr,
                 )
+
+    def call_method_if(
+        self,
+        mod_name: str,
+        filename: str,
+        name: str,
+        lineno: int,
+        variables: Sequence[Tuple[str, Any]],
+    ) -> None:
+        self._call_with_variables("IF", mod_name, filename, name, lineno, variables)
 
     def call_method_else(
         self,
@@ -268,26 +283,22 @@ class _AutoLogging:
         lineno: int,
         variables: Sequence[Tuple[str, Any]],
     ) -> None:
+        self._call_with_variables("ELSE", mod_name, filename, name, lineno, variables)
+
+    def call_assert_failed(
+        self,
+        mod_name: str,
+        filename: str,
+        name: str,
+        lineno: int,
+        variables: Sequence[Tuple[str, Any]],
+    ) -> None:
         if self.tid != threading.get_ident():
             return
 
-        variables_name_type_repr = []
-        if variables is not None:
-            for key, val in variables:
-                obj_type, obj_repr = _get_obj_type_and_repr_and_hide_if_needed(key, val)
-                variables_name_type_repr.append((f"{key}", obj_type, obj_repr))
-
-        with _get_logger_instances() as logger_instances:
-            for robo_logger in logger_instances:
-                robo_logger.start_element(
-                    name,
-                    mod_name,
-                    filename,
-                    lineno,
-                    "ELSE",
-                    "",
-                    variables_name_type_repr,
-                )
+        self._call_with_variables(
+            "ASSERT_FAILED", mod_name, filename, name, lineno, variables
+        )
 
     def call_before_yield_from(
         self,
@@ -308,7 +319,9 @@ class _AutoLogging:
         else:
             if pop_stack_entry.mod_name != mod_name or pop_stack_entry.name != name:
                 critical(
-                    f"On before yield from status stack package/name was: {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received: {mod_name}.{name}."
+                    "On before yield from status stack package/name was:"
+                    f" {pop_stack_entry.mod_name}.{pop_stack_entry.name}. Received:"
+                    f" {mod_name}.{name}."
                 )
                 return
 

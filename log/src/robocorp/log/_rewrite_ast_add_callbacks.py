@@ -1,6 +1,6 @@
 import ast
 import types
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Literal
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from ._ast_utils import ASTRewriter
 from ._config import AutoLogConfigBase, FilterKind
@@ -119,7 +119,8 @@ def _create_method_with_stmt(
 ) -> ast.With:
     # Target code:
     # def method(a, b):
-    #     with MethodLifecycleContextCallerInProject(__name, __file__, "method_name", 11, {'a': a, 'b': b}) as ctx:
+    #     with MethodLifecycleContextCallerInProject(
+    #         __name, __file__, "method_name", 11, {'a': a, 'b': b}) as ctx:
     #         ...
     if filter_kind == FilterKind.log_on_project_call:
         name = "MethodLifecycleContextCallerInProject"
@@ -174,10 +175,12 @@ AcceptedCases = Literal[
     "full_log",
     # Can be used on external libraries when the function is called from the user code.
     "log_on_project_call",
-    # Can be used for generators being tracked (used for things which don't add to the stack internally)
+    # Can be used for generators being tracked (used for things which don't add
+    # to the stack internally)
     # i.e.: for loop can't use it but an assign can.
     "generator",
-    # Can be used even for generators which aren't internally tracked (usually just the function itself).
+    # Can be used even for generators which aren't internally tracked (usually just
+    # the function itself).
     "untracked_generator",
 ]
 
@@ -397,7 +400,8 @@ def _handle_funcdef(
         _rewrite_funcdef(rewrite_ctx, stack, node, filter_kind)
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting function: {node.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting function: {node.name} line: {node.lineno} "
+            f"at: {module_path}"
         )
 
 
@@ -453,7 +457,8 @@ def _handle_return(
         return result
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting function return: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting function return: {function.name} line: {node.lineno}"
+            f" at: {module_path}"
         )
 
 
@@ -464,7 +469,7 @@ def _handle_if(
     if not func_and_class_name:
         return None
 
-    function, class_name = func_and_class_name
+    function, _class_name = func_and_class_name
     if not _accept_function_rewrite(
         function,
         rewrite_ctx,
@@ -517,7 +522,69 @@ def _handle_if(
 
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting function return: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting function return: {function.name} line: {node.lineno}"
+            f" at: {module_path}"
+        )
+
+
+def _handle_assert(
+    rewrite_ctx: ASTRewriter,
+    config: AutoLogConfigBase,
+    module_path,
+    stack,
+    filter_kind,
+    node: ast.Assert,
+):
+    if filter_kind != FilterKind.full_log:
+        return None
+
+    func_and_class_name = _get_function_and_class_name(stack)
+    if not func_and_class_name:
+        return None
+
+    function, _class_name = func_and_class_name
+
+    try:
+        factory = rewrite_ctx.NodeFactory(node.lineno, node.col_offset)
+        new_if_node: ast.If = factory.If(factory.NotUnaryOp(node.test))
+
+        # If(
+        # test=UnaryOp(
+        #  op=Not(),
+        #  operand=Constant(value=1)),
+        #    body=[
+        #     Raise(
+        #      exc=Call(
+        #       func=Name(id='AssertionError', ctx=Load()),
+        #       args=[
+        #        Name(id='message', ctx=Load())],
+        #       keywords=[]))],
+        #    orelse=[])],
+
+        func = factory.NameLoad("AssertionError")
+        exc = factory.Call(func)
+        if node.msg:
+            exc.args.append(node.msg)
+        raise_stmt = factory.Raise()
+        raise_stmt.exc = exc
+
+        call = factory.Call(factory.NameLoadRewriteCallback("assert_failed"))
+        call.args.append(factory.NameLoad("__name__"))
+        call.args.append(factory.NameLoad("__file__"))
+        call.args.append(factory.Str(f"assert {ast.unparse(node.test)}"))
+        call.args.append(factory.LineConstantAt(node.lineno))
+
+        targets = _collect_names_used_as_node_or_none(factory, node.test)
+        call.args.append(targets)
+
+        new_if_node.body = [factory.Expr(call), raise_stmt]
+        new_if_node.orelse = []
+        return new_if_node
+
+    except Exception:
+        raise RuntimeError(
+            f"Error when rewriting assert: {function.name} line: {node.lineno} "
+            f"at: {module_path}"
         )
 
 
@@ -563,7 +630,8 @@ def _handle_assign(
                 rewrite_ctx.stmts_cursor.after_append(factory.Expr(call))
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting assign: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting assign: {function.name} line: {node.lineno} "
+            f"at: {module_path}"
         )
 
 
@@ -637,7 +705,7 @@ def _handle_before_try(
         yield
         return
 
-    function, class_name = func_and_class_name
+    function, _class_name = func_and_class_name
 
     try:
         with rewrite_ctx.record_context_ids() as ids:
@@ -657,7 +725,8 @@ def _handle_before_try(
                     handler.body.insert(0, factory.Expr(call))
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting try: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting try: {function.name} line: {node.lineno} at:"
+            f" {module_path}"
         )
 
 
@@ -673,7 +742,7 @@ def _handle_for_or_while(
     if not func_and_class_name:
         return None
 
-    function, class_name = func_and_class_name
+    function, _class_name = func_and_class_name
     if not _accept_function_rewrite(
         function,
         rewrite_ctx,
@@ -714,9 +783,11 @@ def _handle_for_or_while(
 
         # With a FOR we want to generate something as:
         #
-        # @ctx.report_for_start(1, ("FOR", __name__, "filename", "for a in range(2)", 2))
+        # @ctx.report_for_start(1,
+        #    ("FOR", __name__, "filename", "for a in range(2)", 2))
         # for a in b:
-        #     @ctx.report_for_step_start(2, ("FOR_STEP", __name__, "filename", "for a in range(2)", 2), [('a', a)])
+        #     @ctx.report_for_step_start(2, ("FOR_STEP", __name__, "filename",
+        #         "for a in range(2)", 2), [('a', a)])
         #     print(a)
         #     @ctx.report_for_step_end(2)
         #
@@ -726,7 +797,8 @@ def _handle_for_or_while(
         #
         # @ctx.report_while_start(1, ("WHILE", __name__, "filename", "while a < 1", 2))
         # while a < 1:
-        #     @ctx.report_while_step_start(2, ("WHILE_STEP", __name__, "filename", "while a < 1", 2), [('a', a)])
+        #     @ctx.report_while_step_start(2, ("WHILE_STEP", __name__, "filename",
+        #         "while a < 1", 2), [('a', a)])
         #     print(a)
         #     @ctx.report_while_step_end(2)
         #
@@ -788,7 +860,8 @@ def _handle_for_or_while(
 
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting for: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting for: {function.name} line: {node.lineno} "
+            f"at: {module_path}"
         )
 
 
@@ -992,7 +1065,8 @@ def _handle_yield(
             )
     except Exception:
         raise RuntimeError(
-            f"Error when rewriting yield: {function.name} line: {node.lineno} at: {module_path}"
+            f"Error when rewriting yield: {function.name} line: {node.lineno} "
+            f"at: {module_path}"
         )
 
 
@@ -1012,6 +1086,7 @@ _dispatch_after: Dict[
 
 _dispatch_after[ast.Return] = _handle_return
 _dispatch_after[ast.Assign] = _handle_assign
+_dispatch_after[ast.Assert] = _handle_assert
 _dispatch_after[ast.FunctionDef] = _handle_funcdef
 _dispatch_after[ast.Yield] = _handle_yield
 _dispatch_after[ast.YieldFrom] = _handle_yield
@@ -1019,5 +1094,6 @@ _dispatch_after[ast.For] = _handle_for_or_while
 _dispatch_after[ast.While] = _handle_for_or_while
 _dispatch_after[ast.If] = _handle_if
 
-# Note: returns generator which is called when it finishes (right before _dispatch_after)
+# Note: returns generator which is called when it finishes (right before
+# _dispatch_after)
 _dispatch_before[ast.Try] = _handle_before_try
