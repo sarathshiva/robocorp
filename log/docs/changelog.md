@@ -1,7 +1,7 @@
 NEXT
 -----------------------------
 
-- Spec version changed from 0.0.2 to 0.0.3
+- Spec version changed from `0.0.2` to `0.0.3`.
 - `assert` statements are now rewritten so that on failures more information is provided.
 
 
