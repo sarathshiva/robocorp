@@ -62,7 +62,7 @@ NAME_WITH_TAG = f"{sys.implementation.cache_tag}-log-{version}"
 PYC_EXT = ".py" + (__debug__ and "c" or "o")
 PYC_TAIL = "." + NAME_WITH_TAG + PYC_EXT
 
-FORCE_CODE_GENERATION = False
+FORCE_CODE_GENERATION = True
 DEBUG = False
 
 

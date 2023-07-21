@@ -554,6 +554,7 @@ def _handle_before_assert(
         _DispatchTable, rewrite_ctx.dispatch_data
     )
     with dispatch_table.record_name_context():
+        unparsed = ast.unparse(node.test)
         with dispatch_table.assert_context():
             yield
 
@@ -583,7 +584,7 @@ def _handle_before_assert(
             call = factory.Call(factory.NameLoadRewriteCallback("assert_failed"))
             call.args.append(factory.NameLoad("__name__"))
             call.args.append(factory.NameLoad("__file__"))
-            call.args.append(factory.Str(f"{ast.unparse(node.test)}"))
+            call.args.append(factory.Str(unparsed))
             call.args.append(factory.LineConstantAt(node.lineno))
 
             new_if_node: ast.If = factory.If(factory.NotUnaryOp(node.test))

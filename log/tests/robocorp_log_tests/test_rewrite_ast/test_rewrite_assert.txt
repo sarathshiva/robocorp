@@ -13,27 +13,27 @@ def foo():
         @tmp_1 = a
         @tmp_2 = 10
         if not @tmp_1 > @tmp_2:
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_1 > @tmp_2', 7, (('a', @tmp_1), ('10', @tmp_2)))
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'a > 10', 7, (('a', @tmp_1), ('10', @tmp_2)))
             raise AssertionError()
         @tmp_3 = call1(1, 2)
         @tmp_4 = call2(call3())
         if not @tmp_3 == @tmp_4:
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_3 == @tmp_4', 8, (('call1(1, 2)', @tmp_3), ('call2(call3())', @tmp_4)))
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'call1(1, 2) == call2(call3())', 8, (('call1(1, 2)', @tmp_3), ('call2(call3())', @tmp_4)))
             raise AssertionError('The calls do not match')
         @tmp_5 = call1(22)
         @tmp_6 = call1(22)
         @tmp_7 = call3()
         if not @tmp_5 + @tmp_6 * @tmp_7:
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_5 + @tmp_6 * @tmp_7', 9, (('call1(...)', @tmp_5), ('call1(...)', @tmp_6), ('call3()', @tmp_7)))
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'call1(22) + call1(22) * call3()', 9, (('call1(...)', @tmp_5), ('call1(...)', @tmp_6), ('call3()', @tmp_7)))
             raise AssertionError()
         @tmp_8 = a.call1(call2())
         @tmp_9 = a.b.call2(call4())
         @tmp_10 = a.b.c.call3()
         if not @tmp_8 + @tmp_9 * @tmp_10:
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_8 + @tmp_9 * @tmp_10', 10, (('a.call1(...)', @tmp_8), ('a.b.call2(...)', @tmp_9), ('a.b.c.call3()', @tmp_10)))
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'a.call1(call2()) + a.b.call2(call4()) * a.b.c.call3()', 10, (('a.call1(...)', @tmp_8), ('a.b.call2(...)', @tmp_9), ('a.b.c.call3()', @tmp_10)))
             raise AssertionError()
         @tmp_11 = a.b.c
         @tmp_12 = f.g
         if not (@tmp_11 and @tmp_12):
-            @robo_lifecycle_hooks.assert_failed(__name__, __file__, '@tmp_11 and @tmp_12', 11, (('a.b.c', @tmp_11), ('f.g', @tmp_12)))
+            @robo_lifecycle_hooks.assert_failed(__name__, __file__, 'a.b.c and f.g', 11, (('a.b.c', @tmp_11), ('f.g', @tmp_12)))
             raise AssertionError()

@@ -1,10 +1,10 @@
 from contextlib import contextmanager
 
 import pytest
-from robocorp_log_tests.fixtures import AutoLogConfigForTest
-
 from robocorp.log._config import DefaultAutoLogConfig
 from robocorp.log.protocols import LogElementType
+
+from robocorp_log_tests.fixtures import AutoLogConfigForTest
 
 
 class _SetupCallback:
