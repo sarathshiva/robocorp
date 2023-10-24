@@ -59,7 +59,7 @@ class ITask(typing.Protocol):
     def lineno(self) -> int:
         pass
 
-    def run(self) -> None:
+    def run(self, **fields: dict[str, Any]) -> Any:
         pass
 
     @property

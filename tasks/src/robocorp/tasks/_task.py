@@ -1,7 +1,7 @@
 import typing
 from contextlib import contextmanager
 from types import ModuleType
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from robocorp.log import ConsoleMessageKind, console_message
 from robocorp.log.protocols import OptExcInfo
@@ -26,8 +26,8 @@ class Task:
     def lineno(self):
         return self.method.__code__.co_firstlineno
 
-    def run(self):
-        self.method()
+    def run(self, **kwargs: dict[str, Any]) -> Any:
+        return self.method(**kwargs)
 
     @property
     def failed(self):

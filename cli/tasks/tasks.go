@@ -75,6 +75,30 @@ func Run(env environment.Environment, name string) (Result, error) {
 	return result, err
 }
 
+func Serve(
+	env environment.Environment,
+	serverPort int,
+	maxLogFiles int,
+	maxLogFileSize string,
+) error {
+	//env.Variables["RC_LOG_OUTPUT_STDOUT"] = "1"
+
+	cmd := ServeCommand(serverPort, maxLogFiles, maxLogFileSize)
+	exe := env.FindExecutable(cmd[0])
+
+	proc := process.New(exe, cmd[1:]...)
+	proc.Env = env.ToSlice()
+	proc.StdoutListener = func(line string) {
+		fmt.Print(line)
+	}
+	proc.StderrListener = func(line string) {
+		fmt.Print(line)
+	}
+
+	_, err := runWithInterrupt(proc)
+	return err
+}
+
 func ListCommand() []string {
 	return []string{"python", "-m", "robocorp.tasks", "list", "tasks.py"}
 }
@@ -88,6 +112,23 @@ func RunCommand(name string) []string {
 		"--no-status-rc",
 		"--task",
 		name,
+		"tasks.py",
+	}
+}
+
+func ServeCommand(serverPort int, maxLogFiles int, maxLogFileSize string) []string {
+	return []string{
+		"python",
+		"-m",
+		"robocorp.tasks",
+		"serve",
+		"--no-status-rc",
+		"--port",
+		strconv.Itoa(serverPort),
+		"--max-log-file-size",
+		maxLogFileSize,
+		"--max-log-files",
+		strconv.Itoa(maxLogFiles),
 		"tasks.py",
 	}
 }
