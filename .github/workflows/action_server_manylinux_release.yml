@@ -56,7 +56,6 @@ jobs:
           CIBW_SKIP: pp*
           CIBW_BUILD: cp31*-*macos*x86_64 cp31*-*manylinux*x86_64 cp31*-*win*amd64
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_BEFORE_BUILD_LINUX: python -m pip install invoke && python -m invoke download-rcc
 
       - uses: actions/upload-artifact@v4
         with:
