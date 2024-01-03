@@ -25,7 +25,7 @@ def get_copilot_manifest():
             "id": "get_current_date",
             "msaAppId": "<Your-Microsoft-App-ID>",
             "endpoint": "https://eighty-six-tall-rabbits.robocorp.link/api/actions/actions-robo/get-current-date/run",
-            "iconUrl": "<URL-of-Icon-for-Your-Action>",
+            "iconUrl": "https://robocorp.com/wp-content/uploads/2023/10/robocorp-logo-dark.svg",
             "authenticationConnections": [],
         },
         "actions": [
