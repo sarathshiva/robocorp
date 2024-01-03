@@ -33,6 +33,7 @@ def start_server(
     from . import _actions_run
     from ._api_action_package import action_package_api_router
     from ._api_run import run_api_router
+    from ._api_copilot import copilot_api_router
     from ._app import get_app
     from ._models import Action, ActionPackage, get_db
     from ._server_websockets import websocket_api_router
@@ -119,6 +120,7 @@ def start_server(
     app.include_router(run_api_router)
     app.include_router(action_package_api_router)
     app.include_router(websocket_api_router)
+    app.include_router(copilot_api_router)
 
     @app.get("/base_log.html", response_class=HTMLResponse)
     async def serve_log_html(request: Request):
